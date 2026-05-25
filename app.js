@@ -14,6 +14,7 @@ const PUBLIC_BASE_URL = normalizeBaseUrl(process.env.PUBLIC_BASE_URL || process.
 const SESSION_COOKIE = 'spotify_np_session';
 const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const STALE_AFTER_MS = readIntEnv('STALE_AFTER_MS', 45000);
+const OVERLAY_STYLES = ['default', 'bash', 'discord', 'macos', 'windows', 'soundcloud', 'youtube'];
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -104,6 +105,13 @@ app.post('/api-key/rotate', requireLogin, (req, res) => {
   res.redirect('/');
 });
 
+app.post('/settings', requireLogin, (req, res) => {
+  updateUserSettings(req.user, req.body);
+  saveDb();
+  emitSettingsUpdated(req.user);
+  res.redirect('/');
+});
+
 app.get('/overlay/:publicId', (req, res) => {
   const user = getUserByPublicId(req.params.publicId);
   if (!user) {
@@ -118,8 +126,9 @@ app.get('/overlay/:publicId', (req, res) => {
     return;
   }
 
-  const style = req.query.style === 'compact' ? 'compact' : 'default';
-  res.send(renderOverlayPage(req, user, style));
+  const requestedStyle = readOverlayStyle(req.query.style);
+  const style = requestedStyle || getUserOverlayStyle(user);
+  res.send(renderOverlayPage(req, user, style, Boolean(requestedStyle)));
 });
 
 app.get('/u/:publicId', (req, res) => {
@@ -204,6 +213,16 @@ app.post('/api/api-key/rotate', requireLogin, (req, res) => {
   res.json({
     ok: true,
     apiKey,
+    user: serializePrivateUser(req, req.user),
+  });
+});
+
+app.post('/api/me/settings', requireLogin, (req, res) => {
+  updateUserSettings(req.user, req.body);
+  saveDb();
+  emitSettingsUpdated(req.user);
+  res.json({
+    ok: true,
     user: serializePrivateUser(req, req.user),
   });
 });
@@ -313,10 +332,10 @@ function renderDashboard(req, res) {
   session.lastApiKey = '';
 
   const overlayUrl = buildAbsoluteUrl(req, `/overlay/${encodeURIComponent(user.publicId)}`);
-  const compactOverlayUrl = `${overlayUrl}?style=compact`;
   const publicUrl = buildAbsoluteUrl(req, `/u/${encodeURIComponent(user.publicId)}`);
   const serverUrl = buildAbsoluteUrl(req, '');
   const payload = getPublicNowPlaying(user);
+  const overlayStyle = getUserOverlayStyle(user);
   const keyBlock = apiKey
     ? `
       <label>New API key
@@ -376,15 +395,15 @@ function renderDashboard(req, res) {
               <button class="button" type="button" data-copy="#overlay-url">Copy</button>
             </div>
           </label>
-          <label>Compact overlay
-            <div class="copy-row">
-              <input id="compact-overlay-url" readonly value="${escapeAttribute(compactOverlayUrl)}">
-              <button class="button" type="button" data-copy="#compact-overlay-url">Copy</button>
-            </div>
+          <label>Overlay style
+            <select class="select-input" data-overlay-style-select>
+              ${renderOverlayStyleOptions(overlayStyle)}
+            </select>
           </label>
+          <p class="hint" data-overlay-style-status>Open overlays using the default URL update when this changes.</p>
           <div class="topbar-actions">
             <a class="button primary" href="${escapeAttribute(publicUrl)}">Open Public Page</a>
-            <a class="button" href="${escapeAttribute(compactOverlayUrl)}">Preview Compact</a>
+            <a class="button" href="${escapeAttribute(overlayUrl)}" data-overlay-preview>Preview Overlay</a>
           </div>
         </div>
 
@@ -428,6 +447,35 @@ function renderDashboard(req, res) {
 
       const root = document.querySelector('[data-public-id]');
       const now = document.querySelector('#dashboard-now');
+      const styleSelect = document.querySelector('[data-overlay-style-select]');
+      const styleStatus = document.querySelector('[data-overlay-style-status]');
+      const previewLink = document.querySelector('[data-overlay-preview]');
+
+      if (styleSelect) {
+        styleSelect.addEventListener('change', async () => {
+          const overlayStyle = styleSelect.value;
+          styleStatus.textContent = 'Saving overlay style...';
+          try {
+            const response = await fetch('/api/me/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ overlayStyle }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(data.error || 'Could not save overlay style.');
+            }
+
+            if (previewLink) {
+              previewLink.href = data.user.overlayUrl;
+            }
+            styleStatus.textContent = 'Overlay style saved. Open overlays updated live.';
+          } catch (error) {
+            styleStatus.textContent = error.message || 'Could not save overlay style.';
+          }
+        });
+      }
+
       if (root && now && window.io) {
         const socket = io({ query: { publicId: root.dataset.publicId } });
         socket.on('nowplaying', (payload) => {
@@ -463,7 +511,7 @@ function renderDashboard(req, res) {
   `));
 }
 
-function renderOverlayPage(req, user, style) {
+function renderOverlayPage(req, user, style, styleLocked = false) {
   const initial = JSON.stringify(getPublicNowPlaying(user)).replace(/</g, '\\u003c');
   return `<!doctype html>
 <html lang="en">
@@ -476,25 +524,15 @@ function renderOverlayPage(req, user, style) {
   </head>
   <body class="overlay-body">
     <main
-      class="overlay-root ${escapeAttribute(style)}"
+      class="np-overlay-page"
       data-public-id="${escapeAttribute(user.publicId)}"
       data-initial="${escapeAttribute(initial)}"
+      data-style="${escapeAttribute(style)}"
+      data-style-locked="${styleLocked ? 'true' : 'false'}"
     >
-      <section class="overlay-card">
-        <div class="overlay-art" data-art></div>
-        <div class="overlay-info">
-          <div class="overlay-kicker" data-status>Waiting</div>
-          <div class="overlay-title" data-title>Waiting for playback</div>
-          <div class="overlay-artist" data-artist>${escapeHtml(user.displayName)}</div>
-          <div class="overlay-progress">
-            <div data-progress></div>
-          </div>
-          <div class="overlay-time">
-            <span data-elapsed>0:00</span>
-            <span data-duration>0:00</span>
-          </div>
-        </div>
-      </section>
+      <div class="np-overlay">
+        <div class="player-container ${escapeAttribute(style)}" data-player></div>
+      </div>
     </main>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/overlay.js"></script>
@@ -568,6 +606,7 @@ function createUser(body) {
     passwordIterations: passwordRecord.iterations,
     apiKeyHash: hashApiKey(apiKey),
     apiKeyPreview: previewApiKey(apiKey),
+    overlayStyle: 'default',
     createdAt: now,
     updatedAt: now,
   };
@@ -584,6 +623,19 @@ function rotateApiKey(user) {
   user.apiKeyPreview = previewApiKey(apiKey);
   user.updatedAt = new Date().toISOString();
   return apiKey;
+}
+
+function updateUserSettings(user, body) {
+  const overlayStyle = readOverlayStyle(body?.overlayStyle);
+  if (overlayStyle) {
+    user.overlayStyle = overlayStyle;
+  }
+
+  user.updatedAt = new Date().toISOString();
+}
+
+function emitSettingsUpdated(user) {
+  io.to(roomForPublicId(user.publicId)).emit('settingsUpdated', serializePublicUser(user));
 }
 
 function createLoginSession(res, userId, lastApiKey = '') {
@@ -772,6 +824,7 @@ function serializePublicUser(user) {
   return {
     publicId: user.publicId,
     displayName: user.displayName,
+    overlayStyle: getUserOverlayStyle(user),
   };
 }
 
@@ -813,6 +866,23 @@ function readIntEnv(name, fallback) {
 
 function normalizeBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '');
+}
+
+function readOverlayStyle(value) {
+  const style = Array.isArray(value) ? value[0] : value;
+  return OVERLAY_STYLES.includes(style) ? style : '';
+}
+
+function getUserOverlayStyle(user) {
+  return readOverlayStyle(user?.overlayStyle) || 'default';
+}
+
+function renderOverlayStyleOptions(selectedStyle) {
+  return OVERLAY_STYLES.map((style) => {
+    const selected = style === selectedStyle ? ' selected' : '';
+    const label = style.charAt(0).toUpperCase() + style.slice(1);
+    return `<option value="${escapeAttribute(style)}"${selected}>${escapeHtml(label)}</option>`;
+  }).join('');
 }
 
 function sanitizeUsername(value) {

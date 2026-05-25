@@ -32,6 +32,10 @@
     @apply min-w-0 w-full rounded-lg border border-neko-line bg-black/40 px-3 py-3 text-sm text-zinc-50 outline-none transition placeholder:text-zinc-500 focus:border-neko-green focus:ring-2 focus:ring-neko-green/20 disabled:text-zinc-500;
   }
 
+  select {
+    @apply min-w-0 w-full rounded-lg border border-neko-line bg-black/40 px-3 py-3 text-sm text-zinc-50 outline-none transition focus:border-neko-green focus:ring-2 focus:ring-neko-green/20;
+  }
+
   label {
     @apply grid gap-2 text-sm font-bold text-zinc-300;
   }
@@ -40,6 +44,656 @@
   h2,
   p {
     @apply m-0;
+  }
+}
+
+.np-overlay-page {
+  min-height: 100vh;
+  background: transparent;
+  color: #fff;
+}
+
+.np-overlay {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: transparent;
+}
+
+.np-overlay .player-container {
+  width: min(100%, 860px);
+}
+
+.np-overlay .player-container.bash,
+.np-overlay .player-container.discord,
+.np-overlay .player-container.windows,
+.np-overlay .player-container.soundcloud {
+  max-width: 720px;
+}
+
+.np-overlay .player-container.macos {
+  max-width: 360px;
+}
+
+.np-overlay .player-container.youtube {
+  max-width: 520px;
+}
+
+@keyframes npRainbowScroll {
+  0% { text-shadow: 0 0 0 violet; }
+  10% { text-shadow: 0 0 0 indigo; }
+  20% { text-shadow: 0 0 0 blue; }
+  30% { text-shadow: 0 0 0 green; }
+  40% { text-shadow: 0 0 0 yellow; }
+  50% { text-shadow: 0 0 0 orange; }
+  60% { text-shadow: 0 0 0 red; }
+  70% { text-shadow: 0 0 0 violet; }
+  80% { text-shadow: 0 0 0 indigo; }
+  90% { text-shadow: 0 0 0 blue; }
+  100% { text-shadow: 0 0 0 green; }
+}
+
+.np-overlay .default-container {
+  position: relative;
+  background-color: #111;
+  color: #fff;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 5vmin;
+  border-radius: 10px;
+  opacity: 0.8;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.np-overlay .default-container.no-song {
+  min-height: 120px;
+  justify-content: center;
+  text-align: center;
+}
+
+.np-overlay .default-background {
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  background-position: center;
+  background-size: 100%;
+  filter: blur(2rem);
+}
+
+.np-overlay .default-album-art {
+  width: 20%;
+  max-height: 50vmin;
+  border-radius: 10px;
+  margin: 1rem;
+}
+
+.np-overlay .default-content {
+  width: 80%;
+  padding: 1rem;
+}
+
+.np-overlay .default-song,
+.np-overlay .default-artist,
+.np-overlay .default-status,
+.np-overlay .default-time,
+.np-overlay .default-footer {
+  color: transparent;
+  display: inline-block;
+  animation: npRainbowScroll 3s linear infinite;
+}
+
+.np-overlay .default-song {
+  font-size: 2em;
+}
+
+.np-overlay .default-artist {
+  font-size: 1.3em;
+  margin-bottom: 1rem;
+}
+
+.np-overlay .default-links {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.np-overlay .default-link {
+  color: #fff;
+  text-decoration: none;
+  border: 1px solid #fff;
+  border-radius: 10px;
+  padding: 0.2em;
+  animation: npRainbowScroll 10s linear infinite;
+}
+
+.np-overlay .default-status {
+  margin: 2rem 0 1rem 0;
+}
+
+.np-overlay .default-progress-container {
+  position: relative;
+  font-weight: bold;
+}
+
+.np-overlay .default-progress-bar {
+  border: 0.15em solid #eee;
+  height: 1em;
+  border-radius: 10px;
+}
+
+.np-overlay .default-progress {
+  background-color: #eee;
+  border: 0.1em solid transparent;
+  height: 0.75em;
+  border-radius: 10px;
+  transition: width 0.2s;
+}
+
+.np-overlay .default-time,
+.np-overlay .default-footer {
+  float: right;
+}
+
+.np-overlay .default-footer {
+  font-size: 0.9em;
+}
+
+.np-overlay .bash-container {
+  background-color: #000;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  padding: 1rem;
+  border: 2px solid #00ff00;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.np-overlay .bash-container::after {
+  content: '_';
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  color: #00ff00;
+  animation: npBlink 1s step-end infinite;
+}
+
+@keyframes npBlink {
+  50% { opacity: 0; }
+}
+
+.np-overlay .bash-song {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.np-overlay .bash-status,
+.np-overlay .bash-progress {
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.np-overlay .bash-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.np-overlay .bash-link,
+.np-overlay .bash-footer a {
+  color: #00ff00;
+  text-decoration: none;
+}
+
+.np-overlay .bash-link {
+  font-size: 0.9rem;
+}
+
+.np-overlay .bash-link:hover,
+.np-overlay .bash-footer a:hover {
+  background-color: #00ff00;
+  color: #000;
+}
+
+.np-overlay .bash-footer {
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .discord-container {
+  background-color: #2f3136;
+  color: #fff;
+  font-family: 'Whitney', sans-serif;
+  border-left: 4px solid #5865f2;
+  padding: 1rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.np-overlay .discord-album-art {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  margin: 1rem;
+}
+
+.np-overlay .discord-content {
+  flex: 1;
+}
+
+.np-overlay .discord-song {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.np-overlay .discord-artist,
+.np-overlay .discord-time,
+.np-overlay .discord-footer {
+  opacity: 0.75;
+}
+
+.np-overlay .discord-artist,
+.np-overlay .discord-status {
+  font-size: 0.875rem;
+}
+
+.np-overlay .discord-status {
+  margin-top: 0.25rem;
+}
+
+.np-overlay .discord-progress-bar {
+  width: 16rem;
+  max-width: 100%;
+  border: 1px solid #b9bbbe;
+  border-radius: 8px;
+  height: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .discord-progress {
+  background-color: #b9bbbe;
+  height: 100%;
+  border-radius: 8px;
+}
+
+.np-overlay .discord-time,
+.np-overlay .discord-link,
+.np-overlay .discord-footer {
+  font-size: 0.75rem;
+}
+
+.np-overlay .discord-links,
+.np-overlay .windows-links,
+.np-overlay .macos-links,
+.np-overlay .soundcloud-links {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .discord-link,
+.np-overlay .discord-footer a {
+  color: #b9bbbe;
+  text-decoration: none;
+}
+
+.np-overlay .discord-link:hover,
+.np-overlay .discord-footer a:hover,
+.np-overlay .macos-link:hover,
+.np-overlay .macos-footer a:hover,
+.np-overlay .windows-link:hover,
+.np-overlay .windows-footer a:hover,
+.np-overlay .soundcloud-footer a:hover {
+  text-decoration: underline;
+}
+
+.np-overlay .macos-container {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #000;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  border-radius: 1.5rem;
+  padding: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.np-overlay .macos-background {
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  background: linear-gradient(to bottom right, #f3f4f6, #e5e7eb);
+  filter: blur(2rem);
+}
+
+.np-overlay .macos-album-art {
+  width: 128px;
+  height: 128px;
+  border-radius: 1.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.np-overlay .macos-content {
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .macos-song {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.np-overlay .macos-artist,
+.np-overlay .macos-status,
+.np-overlay .macos-link {
+  font-size: 0.875rem;
+}
+
+.np-overlay .macos-artist,
+.np-overlay .macos-footer {
+  opacity: 0.75;
+}
+
+.np-overlay .macos-status {
+  margin-top: 0.25rem;
+}
+
+.np-overlay .macos-progress-container {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .macos-progress-bar {
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  height: 0.75rem;
+}
+
+.np-overlay .macos-progress {
+  background-color: #2563eb;
+  height: 100%;
+  border-radius: 9999px;
+}
+
+.np-overlay .macos-time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.np-overlay .macos-link {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.np-overlay .macos-footer {
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .macos-footer a {
+  color: #000;
+  text-decoration: none;
+}
+
+.np-overlay .windows-container {
+  background-color: #f3f4f6;
+  color: #000;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 1rem;
+}
+
+.np-overlay .windows-album-art {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+}
+
+.np-overlay .windows-song {
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+
+.np-overlay .windows-artist {
+  font-size: 0.875rem;
+}
+
+.np-overlay .windows-status,
+.np-overlay .windows-time,
+.np-overlay .windows-link,
+.np-overlay .windows-footer {
+  font-size: 0.75rem;
+}
+
+.np-overlay .windows-status,
+.np-overlay .windows-time,
+.np-overlay .windows-footer {
+  margin-top: 0.25rem;
+}
+
+.np-overlay .windows-progress-bar {
+  border: 1px solid #9ca3af;
+  border-radius: 6px;
+  height: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .windows-progress {
+  background-color: #1d4ed8;
+  height: 100%;
+  border-radius: 6px;
+}
+
+.np-overlay .windows-link {
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+.np-overlay .windows-footer {
+  opacity: 0.5;
+}
+
+.np-overlay .windows-footer a {
+  color: #000;
+  text-decoration: none;
+}
+
+.np-overlay .soundcloud-container {
+  background-color: #ff5500;
+  color: #fff;
+  font-family: sans-serif;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.np-overlay .soundcloud-background {
+  position: absolute;
+  inset: 0;
+  z-index: -10;
+  background-color: #e64500;
+  filter: blur(2rem);
+}
+
+.np-overlay .soundcloud-header,
+.np-overlay .soundcloud-progress-container {
+  display: flex;
+  align-items: center;
+}
+
+.np-overlay .soundcloud-album-art {
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+}
+
+.np-overlay .soundcloud-title {
+  margin-left: 1rem;
+}
+
+.np-overlay .soundcloud-song {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.np-overlay .soundcloud-artist {
+  font-size: 0.875rem;
+}
+
+.np-overlay .soundcloud-progress-container {
+  margin-top: 0.5rem;
+}
+
+.np-overlay .soundcloud-play-button {
+  width: 32px;
+  height: 32px;
+  background-color: #fff;
+  color: #ff5500;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.np-overlay .soundcloud-play-button::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid #ff5500;
+  margin-left: 3px;
+}
+
+.np-overlay .soundcloud-progress-bar {
+  flex: 1;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  height: 0.5rem;
+}
+
+.np-overlay .soundcloud-progress {
+  background-color: #fff;
+  height: 100%;
+  border-radius: 8px;
+}
+
+.np-overlay .soundcloud-time {
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+}
+
+.np-overlay .soundcloud-link {
+  color: #fff;
+  border: 1px solid #fff;
+  border-radius: 8px;
+  padding: 0.25rem 0.5rem;
+  text-decoration: none;
+}
+
+.np-overlay .soundcloud-link:hover {
+  background-color: #fff;
+  color: #ff5500;
+}
+
+.np-overlay .soundcloud-footer {
+  font-size: 0.75rem;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.np-overlay .soundcloud-footer a {
+  color: #fff;
+  text-decoration: none;
+}
+
+.np-overlay .youtube-container {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.np-overlay .youtube-thumbnail {
+  position: relative;
+}
+
+.np-overlay .youtube-controls {
+  transition: opacity 0.3s ease;
+}
+
+.np-overlay .youtube-controls:hover {
+  opacity: 0.9;
+}
+
+.np-overlay .youtube-progress {
+  transition: width 0.1s linear;
+}
+
+@media (max-width: 640px) {
+  .np-overlay .youtube-container {
+    padding: 0.5rem;
+  }
+
+  .np-overlay .youtube-title {
+    font-size: 1rem;
+  }
+
+  .np-overlay .youtube-channel,
+  .np-overlay .youtube-time,
+  .np-overlay .youtube-status {
+    font-size: 0.75rem;
+  }
+
+  .np-overlay .youtube-links {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 410px) {
+  .np-overlay .hide-on-mobile {
+    display: none;
+  }
+
+  .np-overlay {
+    padding: 6px;
+  }
+
+  .np-overlay .default-container {
+    font-size: 7vmin;
+  }
+
+  .np-overlay .default-album-art {
+    margin: 0.5rem;
+  }
+
+  .np-overlay .windows-container {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .np-overlay .windows-album-art {
+    width: 64px;
+    height: 64px;
   }
 }
 
@@ -105,6 +759,10 @@
 
   .button.danger {
     @apply hover:border-red-400/70 hover:bg-red-500/10;
+  }
+
+  .select-input {
+    @apply cursor-pointer;
   }
 
   .alert {
