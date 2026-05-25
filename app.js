@@ -227,6 +227,14 @@ app.post('/api/me/settings', requireLogin, (req, res) => {
   });
 });
 
+app.get('/api/nowplaying', requireApiKey, (req, res) => {
+  res.json(getOwnNowPlaying(req.apiUser, req));
+});
+
+app.get('/api/me/nowplaying', requireApiKey, (req, res) => {
+  res.json(getOwnNowPlaying(req.apiUser, req));
+});
+
 app.get('/api/users/:publicId/nowplaying', (req, res) => {
   const user = getUserByPublicId(req.params.publicId);
   if (!user) {
@@ -333,6 +341,7 @@ function renderDashboard(req, res) {
 
   const overlayUrl = buildAbsoluteUrl(req, `/overlay/${encodeURIComponent(user.publicId)}`);
   const publicUrl = buildAbsoluteUrl(req, `/u/${encodeURIComponent(user.publicId)}`);
+  const apiUrl = buildAbsoluteUrl(req, '/api/nowplaying');
   const serverUrl = buildAbsoluteUrl(req, '');
   const payload = getPublicNowPlaying(user);
   const overlayStyle = getUserOverlayStyle(user);
@@ -395,6 +404,13 @@ function renderDashboard(req, res) {
               <button class="button" type="button" data-copy="#overlay-url">Copy</button>
             </div>
           </label>
+          <label>Now-playing API
+            <div class="copy-row">
+              <input id="api-url" readonly value="${escapeAttribute(apiUrl)}">
+              <button class="button" type="button" data-copy="#api-url">Copy</button>
+            </div>
+          </label>
+          <p class="hint">Pull your own data with <code>X-API-Key</code> or <code>Authorization: Bearer</code>.</p>
           <label>Overlay style
             <select class="select-input" data-overlay-style-select>
               ${renderOverlayStyleOptions(overlayStyle)}
@@ -718,8 +734,9 @@ function readApiKey(req) {
   const bearer = auth.toLowerCase().startsWith('bearer ')
     ? auth.slice('bearer '.length).trim()
     : '';
+  const queryKey = readString(req.query?.apiKey, 256);
 
-  return headerKey || bearer || readString(req.body.apiKey, 256);
+  return headerKey || bearer || queryKey || readString(req.body?.apiKey, 256);
 }
 
 function normalizeNowPlaying(body) {
@@ -730,10 +747,16 @@ function normalizeNowPlaying(body) {
       empty: true,
       trackUri: '',
       name: '',
+      title: '',
       artists: [],
+      artistLinks: [],
       artistName: '',
       albumName: '',
+      albumUri: '',
+      albumUrl: '',
       image: '',
+      coverImage: '',
+      spotifyUrl: '',
       durationMs: 0,
       progressMs: 0,
       paused: true,
@@ -743,21 +766,36 @@ function normalizeNowPlaying(body) {
   }
 
   const artists = readStringArray(body.artists, 120, 8);
-  const artistName = readString(body.artistName || body.artist || artists.join(', '), 240);
   const durationMs = clampNumber(body.durationMs || body.duration || 0, 0, 24 * 60 * 60 * 1000);
   const progressMs = clampNumber(body.progressMs || body.progress || 0, 0, durationMs || 24 * 60 * 60 * 1000);
   const paused = body.paused === true || body.isPlaying === false || body.playing === false;
   const trackUri = readString(body.trackUri || body.uri, 256);
   const name = readString(body.name || body.title, 256);
+  const albumUri = readString(body.albumUri || body.albumURI || body.album_uri, 256);
+  const image = readString(body.image || body.imageUrl || body.coverUrl, 2048);
+  const coverImage = readString(body.coverImage || body.albumImage || body.albumImageUrl, 2048) || image;
+  const artistLinks = normalizeArtistLinks(body.artistLinks, artists);
+  const artistName = readString(
+    body.artistName || body.artist || artistLinks.map((artist) => artist.name).filter(Boolean).join(', ') || artists.join(', '),
+    240,
+  );
+  const spotifyUrl = readString(body.spotifyUrl || body.trackUrl || body.externalUrl, 2048) || spotifyUrlFromUri(trackUri);
+  const albumUrl = readString(body.albumUrl || body.albumSpotifyUrl || body.albumExternalUrl, 2048) || spotifyUrlFromUri(albumUri);
 
   return {
     empty: !trackUri && !name,
     trackUri,
     name,
-    artists,
+    title: name,
+    artists: artistLinks.length > 0 ? artistLinks.map((artist) => artist.name).filter(Boolean) : artists,
+    artistLinks,
     artistName,
     albumName: readString(body.albumName || body.album, 256),
-    image: readString(body.image || body.imageUrl || body.coverUrl, 2048),
+    albumUri,
+    albumUrl,
+    image,
+    coverImage,
+    spotifyUrl,
     durationMs,
     progressMs,
     paused,
@@ -779,10 +817,16 @@ function getPublicNowPlaying(user) {
         stale: true,
         trackUri: '',
         name: '',
+        title: '',
         artists: [],
+        artistLinks: [],
         artistName: '',
         albumName: '',
+        albumUri: '',
+        albumUrl: '',
         image: '',
+        coverImage: '',
+        spotifyUrl: '',
         durationMs: 0,
         progressMs: 0,
         paused: true,
@@ -800,12 +844,114 @@ function getPublicNowPlaying(user) {
   return {
     serverTime: new Date(serverTime).toISOString(),
     user: serializePublicUser(user),
-    song: {
+    song: enrichSongForApi({
       ...stored,
       progressMs: liveProgressMs,
       stale: ageMs > STALE_AFTER_MS,
+    }),
+  };
+}
+
+function getOwnNowPlaying(user, req) {
+  const payload = getPublicNowPlaying(user);
+  const song = payload.song;
+
+  return {
+    ok: true,
+    serverTime: payload.serverTime,
+    user: payload.user,
+    song,
+    track: {
+      uri: song.trackUri || '',
+      title: song.title || song.name || '',
+      name: song.name || song.title || '',
+      spotifyUrl: song.spotifyUrl || '',
+      durationMs: song.durationMs || 0,
+      progressMs: song.progressMs || 0,
+      paused: Boolean(song.paused),
+      isPlaying: Boolean(song.isPlaying),
+      stale: Boolean(song.stale),
+    },
+    album: {
+      name: song.albumName || '',
+      uri: song.albumUri || '',
+      spotifyUrl: song.albumUrl || '',
+      image: song.coverImage || song.image || '',
+    },
+    artists: Array.isArray(song.artistLinks) ? song.artistLinks : [],
+    links: {
+      overlay: buildAbsoluteUrl(req, `/overlay/${encodeURIComponent(user.publicId)}`),
+      public: buildAbsoluteUrl(req, `/u/${encodeURIComponent(user.publicId)}`),
+      track: song.spotifyUrl || '',
+      album: song.albumUrl || '',
     },
   };
+}
+
+function enrichSongForApi(song) {
+  const fallbackArtists = Array.isArray(song.artists) ? song.artists : [];
+  const artistLinks = normalizeArtistLinks(song.artistLinks, fallbackArtists);
+  const title = song.title || song.name || '';
+  const spotifyUrl = song.spotifyUrl || spotifyUrlFromUri(song.trackUri);
+  const albumUrl = song.albumUrl || spotifyUrlFromUri(song.albumUri);
+  const coverImage = song.coverImage || song.image || '';
+
+  return {
+    ...song,
+    name: song.name || title,
+    title,
+    artists: artistLinks.map((artist) => artist.name).filter(Boolean),
+    artistLinks,
+    artistName: song.artistName || artistLinks.map((artist) => artist.name).filter(Boolean).join(', '),
+    albumUri: song.albumUri || '',
+    albumUrl,
+    image: song.image || coverImage,
+    coverImage,
+    spotifyUrl,
+  };
+}
+
+function normalizeArtistLinks(value, fallbackNames = []) {
+  const fallback = readStringArray(fallbackNames, 120, 8);
+  const rawArtists = Array.isArray(value) ? value : [];
+  const normalized = rawArtists
+    .map((artist, index) => {
+      if (typeof artist === 'string') {
+        const name = readString(artist, 120);
+        return name ? { name, uri: '', spotifyUrl: '' } : null;
+      }
+
+      const name = readString(artist?.name || fallback[index], 120);
+      const uri = readString(artist?.uri || artist?.artistUri, 256);
+      const spotifyUrl = readString(artist?.spotifyUrl || artist?.url || artist?.externalUrl, 2048)
+        || spotifyUrlFromUri(uri);
+
+      return name ? { name, uri, spotifyUrl } : null;
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  return fallback.map((name) => ({ name, uri: '', spotifyUrl: '' }));
+}
+
+function spotifyUrlFromUri(uri) {
+  const [service, type, id] = readString(uri, 256).split(':');
+  const supportedTypes = {
+    album: 'album',
+    artist: 'artist',
+    episode: 'episode',
+    playlist: 'playlist',
+    show: 'show',
+    track: 'track',
+  };
+
+  return service === 'spotify' && supportedTypes[type] && id
+    ? `https://open.spotify.com/${supportedTypes[type]}/${encodeURIComponent(id)}`
+    : '';
 }
 
 function serializePrivateUser(req, user) {

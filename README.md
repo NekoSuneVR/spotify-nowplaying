@@ -50,12 +50,75 @@ Body:
   "trackUri": "spotify:track:...",
   "name": "Song name",
   "artists": ["Artist"],
+  "artistLinks": [
+    {
+      "name": "Artist",
+      "uri": "spotify:artist:...",
+      "spotifyUrl": "https://open.spotify.com/artist/..."
+    }
+  ],
   "artistName": "Artist",
   "albumName": "Album",
+  "albumUri": "spotify:album:...",
+  "albumUrl": "https://open.spotify.com/album/...",
   "image": "https://...",
+  "coverImage": "https://...",
+  "spotifyUrl": "https://open.spotify.com/track/...",
   "durationMs": 180000,
   "progressMs": 42000,
   "paused": false,
   "source": "spicetify-nowplaying"
+}
+```
+
+Authenticated read endpoint for the current user's now-playing data:
+
+```http
+GET /api/nowplaying
+X-API-Key: npk_...
+```
+
+You can also send the key as `Authorization: Bearer npk_...`. The server does not call Spotify; URLs are computed from the Spotify URIs sent by the plugin.
+
+Example response:
+
+```json
+{
+  "ok": true,
+  "serverTime": "2026-05-25T07:30:00.000Z",
+  "user": {
+    "publicId": "demo",
+    "displayName": "Demo",
+    "overlayStyle": "default"
+  },
+  "track": {
+    "uri": "spotify:track:...",
+    "title": "Song name",
+    "spotifyUrl": "https://open.spotify.com/track/...",
+    "durationMs": 180000,
+    "progressMs": 42000,
+    "paused": false,
+    "isPlaying": true,
+    "stale": false
+  },
+  "album": {
+    "name": "Album",
+    "uri": "spotify:album:...",
+    "spotifyUrl": "https://open.spotify.com/album/...",
+    "image": "https://..."
+  },
+  "artists": [
+    {
+      "name": "Artist",
+      "uri": "spotify:artist:...",
+      "spotifyUrl": "https://open.spotify.com/artist/..."
+    }
+  ],
+  "links": {
+    "overlay": "https://spnp.nekosunevr.co.uk/overlay/demo",
+    "public": "https://spnp.nekosunevr.co.uk/u/demo",
+    "track": "https://open.spotify.com/track/...",
+    "album": "https://open.spotify.com/album/..."
+  }
 }
 ```
