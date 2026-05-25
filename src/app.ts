@@ -19,7 +19,7 @@ class SpotifyNowPlayingPlugin {
 
   constructor() {
     injectStyles();
-    new Spicetify.Topbar.Button('Spotify Now Playing', iconSvg, () => this.openSettings());
+    new Spicetify.Topbar.Button('Spotify Now Playing (NP)', iconSvg, () => this.openSettings());
     this.registerPlayerListeners();
     this.startStateWatcher();
     this.restartTimer();
@@ -252,10 +252,17 @@ class SpotifyNowPlayingPlugin {
   }
 }
 
+const SPICETIFY_BOOTSTRAP_WAIT_MS = 300;
+
 async function main() {
-  if (!Spicetify.Platform || !Spicetify.Player || !Spicetify.LocalStorage || !Spicetify.Topbar) {
-    setTimeout(main, 1000);
-    return;
+  while (
+    !Spicetify?.Topbar
+    || !Spicetify?.Platform
+    || !Spicetify?.Player
+    || !Spicetify?.LocalStorage
+    || !Spicetify?.showNotification
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, SPICETIFY_BOOTSTRAP_WAIT_MS));
   }
 
   new SpotifyNowPlayingPlugin();
