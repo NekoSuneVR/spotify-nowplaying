@@ -1,0 +1,11 @@
+{
+  "name": "Spotify Now Playing",
+  "description": "Transmit local Spotify desktop now-playing state to your own overlay server.",
+  "main": "compiled/spotifyNowPlaying.js",
+  "readme": "README.md",
+  "authors": [
+    {
+      "name": "NekoSuneVR"
+    }
+  ]
+}

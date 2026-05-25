@@ -1,0 +1,22 @@
+{
+  "name": "spotify-nowplaying-plugin",
+  "version": "1.0.0",
+  "description": "Spicetify plugin that transmits local Spotify now-playing state to a self-hosted overlay server.",
+  "scripts": {
+    "build": "spicetify-creator",
+    "build-local": "spicetify-creator --out=dist --minify",
+    "watch": "spicetify-creator --watch"
+  },
+  "keywords": [
+    "spicetify",
+    "spotify",
+    "now-playing",
+    "overlay"
+  ],
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^17.0.45",
+    "spicetify-creator": "^1.0.13",
+    "typescript": "^4.9.5"
+  }
+}
