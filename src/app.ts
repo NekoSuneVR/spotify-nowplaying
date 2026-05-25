@@ -19,7 +19,7 @@ class SpotifyNowPlayingPlugin {
 
   constructor() {
     injectStyles();
-    new Spicetify.Topbar.Button('Spotify Now Playing', iconSvg, () => this.openSettings());
+    new Spicetify.Topbar.Button('Spotify Now Playing (NP)', iconSvg, () => this.openSettings());
     this.registerPlayerListeners();
     this.startStateWatcher();
     this.restartTimer();
