@@ -6,10 +6,16 @@ const path = require('path');
 require('dotenv').config();
 
 const express = require('express');
+const { Sequelize, DataTypes, Op } = require('sequelize');
 const { Server } = require('socket.io');
 
 const PORT = readIntEnv('PORT', 3000);
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'db.json');
+const DATABASE_DIALECT = normalizeDatabaseDialect(
+  process.env.DATABASE_DIALECT || process.env.DB_DIALECT || inferDatabaseDialect(process.env.DATABASE_URL) || 'sqlite',
+);
+const DATABASE_URL = readString(process.env.DATABASE_URL, 2048);
+const SQLITE_STORAGE = process.env.SQLITE_STORAGE || process.env.SQLITE_PATH || path.join(__dirname, 'data', 'nowplaying.sqlite');
+const LEGACY_JSON_PATH = process.env.LEGACY_JSON_PATH || path.join(__dirname, 'data', 'db.json');
 const PUBLIC_BASE_URL = normalizeBaseUrl(process.env.PUBLIC_BASE_URL || process.env.APP_URL || '');
 const SESSION_COOKIE = 'spotify_np_session';
 const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -25,7 +31,8 @@ const io = new Server(httpServer, {
 });
 
 const sessions = new Map();
-let db = loadDb();
+const { sequelize, UserModel, NowPlayingModel } = createDatabase();
+let db = { users: [], nowPlaying: {} };
 
 app.set('trust proxy', true);
 app.use((req, res, next) => {
@@ -69,9 +76,9 @@ app.get('/', (req, res) => {
   renderLoggedOut(req, res);
 });
 
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
   try {
-    const { user, apiKey } = createUser(req.body);
+    const { user, apiKey } = await createUser(req.body);
     createLoginSession(res, user.id, apiKey);
     res.redirect('/');
   } catch (error) {
@@ -98,16 +105,16 @@ app.post('/logout', (req, res) => {
   res.redirect('/');
 });
 
-app.post('/api-key/rotate', requireLogin, (req, res) => {
+app.post('/api-key/rotate', requireLogin, async (req, res) => {
   const apiKey = rotateApiKey(req.user);
   req.currentSession.lastApiKey = apiKey;
-  saveDb();
+  await saveDb();
   res.redirect('/');
 });
 
-app.post('/settings', requireLogin, (req, res) => {
+app.post('/settings', requireLogin, async (req, res) => {
   updateUserSettings(req.user, req.body);
-  saveDb();
+  await saveDb();
   emitSettingsUpdated(req.user);
   res.redirect('/');
 });
@@ -174,9 +181,9 @@ app.get('/api/me', requireLogin, (req, res) => {
   });
 });
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const { user, apiKey } = createUser(req.body);
+    const { user, apiKey } = await createUser(req.body);
     createLoginSession(res, user.id, apiKey);
     res.status(201).json({
       ok: true,
@@ -207,9 +214,9 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/api-key/rotate', requireLogin, (req, res) => {
+app.post('/api/api-key/rotate', requireLogin, async (req, res) => {
   const apiKey = rotateApiKey(req.user);
-  saveDb();
+  await saveDb();
   res.json({
     ok: true,
     apiKey,
@@ -217,9 +224,9 @@ app.post('/api/api-key/rotate', requireLogin, (req, res) => {
   });
 });
 
-app.post('/api/me/settings', requireLogin, (req, res) => {
+app.post('/api/me/settings', requireLogin, async (req, res) => {
   updateUserSettings(req.user, req.body);
-  saveDb();
+  await saveDb();
   emitSettingsUpdated(req.user);
   res.json({
     ok: true,
@@ -245,7 +252,7 @@ app.get('/api/users/:publicId/nowplaying', (req, res) => {
   res.json(getPublicNowPlaying(user));
 });
 
-app.post('/api/nowplaying', requireApiKey, (req, res) => {
+app.post('/api/nowplaying', requireApiKey, async (req, res) => {
   const song = normalizeNowPlaying(req.body);
   const now = Date.now();
 
@@ -255,7 +262,7 @@ app.post('/api/nowplaying', requireApiKey, (req, res) => {
     updatedAt: new Date(now).toISOString(),
   };
   req.apiUser.updatedAt = new Date(now).toISOString();
-  saveDb();
+  await saveDb();
 
   const payload = getPublicNowPlaying(req.apiUser);
   io.to(roomForPublicId(req.apiUser.publicId)).emit('nowplaying', payload);
@@ -268,21 +275,32 @@ app.post('/api/nowplaying', requireApiKey, (req, res) => {
   });
 });
 
-app.delete('/api/nowplaying', requireApiKey, (req, res) => {
+app.delete('/api/nowplaying', requireApiKey, async (req, res) => {
   delete db.nowPlaying[req.apiUser.id];
-  saveDb();
+  await saveDb();
 
   const payload = getPublicNowPlaying(req.apiUser);
   io.to(roomForPublicId(req.apiUser.publicId)).emit('nowplaying', payload);
   res.json({ ok: true });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Spotify Now Playing server ready at http://localhost:${PORT}`);
-  if (PUBLIC_BASE_URL) {
-    console.log(`Public base URL: ${PUBLIC_BASE_URL}`);
-  }
+startServer().catch((error) => {
+  console.error('Failed to start Spotify Now Playing server.');
+  console.error(error);
+  process.exit(1);
 });
+
+async function startServer() {
+  await initializeDatabase();
+
+  httpServer.listen(PORT, () => {
+    console.log(`Spotify Now Playing server ready at http://localhost:${PORT}`);
+    console.log(`Database: ${describeDatabase()}`);
+    if (PUBLIC_BASE_URL) {
+      console.log(`Public base URL: ${PUBLIC_BASE_URL}`);
+    }
+  });
+}
 
 function renderLoggedOut(req, res, options = {}) {
   const error = options.error
@@ -442,6 +460,10 @@ function renderDashboard(req, res) {
               <strong>${PORT}</strong>
             </div>
             <div class="stat">
+              <span>Database</span>
+              <strong>${escapeHtml(describeDatabase())}</strong>
+            </div>
+            <div class="stat">
               <span>Realtime</span>
               <strong>Socket.IO</strong>
             </div>
@@ -592,7 +614,7 @@ function renderPage(title, body) {
 </html>`;
 }
 
-function createUser(body) {
+async function createUser(body) {
   const username = sanitizeUsername(body.username);
   const password = String(body.password || '');
   const displayName = sanitizeDisplayName(body.displayName || username);
@@ -628,7 +650,7 @@ function createUser(body) {
   };
 
   db.users.push(user);
-  saveDb();
+  await saveDb();
 
   return { user, apiKey };
 }
@@ -1014,6 +1036,64 @@ function normalizeBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '');
 }
 
+function normalizeDatabaseDialect(value) {
+  const dialect = String(value || '').trim().toLowerCase();
+  if (['postgresql', 'postgres', 'pgsql', 'progresssql', 'progressql'].includes(dialect)) {
+    return 'postgres';
+  }
+
+  if (dialect === 'mysql') {
+    return 'mysql';
+  }
+
+  return 'sqlite';
+}
+
+function inferDatabaseDialect(url) {
+  const value = String(url || '').trim().toLowerCase();
+  if (value.startsWith('postgres://') || value.startsWith('postgresql://')) {
+    return 'postgres';
+  }
+
+  if (value.startsWith('mysql://')) {
+    return 'mysql';
+  }
+
+  if (value.startsWith('sqlite:')) {
+    return 'sqlite';
+  }
+
+  return '';
+}
+
+function defaultDatabasePort(dialect) {
+  if (dialect === 'postgres') {
+    return 5432;
+  }
+
+  if (dialect === 'mysql') {
+    return 3306;
+  }
+
+  return 0;
+}
+
+function describeDatabase() {
+  if (DATABASE_DIALECT === 'sqlite') {
+    return `sqlite:${SQLITE_STORAGE}`;
+  }
+
+  if (DATABASE_URL) {
+    return `${DATABASE_DIALECT}:DATABASE_URL`;
+  }
+
+  return `${DATABASE_DIALECT}:${process.env.DATABASE_HOST || '127.0.0.1'}/${process.env.DATABASE_NAME || 'spotify_nowplaying'}`;
+}
+
+function isTruthyEnv(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
 function readOverlayStyle(value) {
   const style = Array.isArray(value) ? value[0] : value;
   return OVERLAY_STYLES.includes(style) ? style : '';
@@ -1116,25 +1196,192 @@ function parseCookies(req) {
   }, {});
 }
 
-function loadDb() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    return {
-      users: Array.isArray(parsed.users) ? parsed.users : [],
-      nowPlaying: parsed.nowPlaying && typeof parsed.nowPlaying === 'object'
-        ? parsed.nowPlaying
-        : {},
-    };
-  } catch {
-    return { users: [], nowPlaying: {} };
-  }
+function createDatabase() {
+  const options = {
+    dialect: DATABASE_DIALECT,
+    logging: isTruthyEnv(process.env.DATABASE_LOGGING) ? console.log : false,
+    define: {
+      freezeTableName: true,
+    },
+  };
+
+  const instance = DATABASE_URL
+    ? new Sequelize(DATABASE_URL, options)
+    : new Sequelize(
+      process.env.DATABASE_NAME || 'spotify_nowplaying',
+      process.env.DATABASE_USER || 'root',
+      process.env.DATABASE_PASSWORD || '',
+      {
+        ...options,
+        host: process.env.DATABASE_HOST || '127.0.0.1',
+        port: readIntEnv('DATABASE_PORT', defaultDatabasePort(DATABASE_DIALECT)),
+        storage: DATABASE_DIALECT === 'sqlite' ? SQLITE_STORAGE : undefined,
+      },
+    );
+
+  const User = instance.define('User', {
+    id: { type: DataTypes.STRING(64), primaryKey: true },
+    username: { type: DataTypes.STRING(64), allowNull: false, unique: true },
+    displayName: { type: DataTypes.STRING(96), allowNull: false },
+    publicId: { type: DataTypes.STRING(128), allowNull: false, unique: true },
+    passwordHash: { type: DataTypes.STRING(256), allowNull: false },
+    passwordSalt: { type: DataTypes.STRING(256), allowNull: false },
+    passwordIterations: { type: DataTypes.INTEGER, allowNull: false },
+    apiKeyHash: { type: DataTypes.STRING(128), allowNull: false },
+    apiKeyPreview: { type: DataTypes.STRING(64), allowNull: false },
+    overlayStyle: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'default' },
+    createdAt: { type: DataTypes.STRING(40), allowNull: false },
+    updatedAt: { type: DataTypes.STRING(40), allowNull: false },
+  }, {
+    tableName: 'users',
+    timestamps: false,
+  });
+
+  const NowPlaying = instance.define('NowPlaying', {
+    userId: { type: DataTypes.STRING(64), primaryKey: true },
+    payload: { type: DataTypes.TEXT('long'), allowNull: false },
+  }, {
+    tableName: 'now_playing',
+    timestamps: false,
+  });
+
+  User.hasOne(NowPlaying, {
+    foreignKey: 'userId',
+    sourceKey: 'id',
+    onDelete: 'CASCADE',
+  });
+  NowPlaying.belongsTo(User, {
+    foreignKey: 'userId',
+    targetKey: 'id',
+  });
+
+  return { sequelize: instance, UserModel: User, NowPlayingModel: NowPlaying };
 }
 
+async function initializeDatabase() {
+  if (DATABASE_DIALECT === 'sqlite') {
+    fs.mkdirSync(path.dirname(SQLITE_STORAGE), { recursive: true });
+  }
+
+  await sequelize.authenticate();
+  await sequelize.sync();
+  db = await loadDb();
+  await importLegacyJsonIfNeeded();
+}
+
+async function loadDb() {
+  const users = (await UserModel.findAll({ raw: true }))
+    .map((user) => ({
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      publicId: user.publicId,
+      passwordHash: user.passwordHash,
+      passwordSalt: user.passwordSalt,
+      passwordIterations: user.passwordIterations,
+      apiKeyHash: user.apiKeyHash,
+      apiKeyPreview: user.apiKeyPreview,
+      overlayStyle: user.overlayStyle,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+  const nowPlayingRows = await NowPlayingModel.findAll({ raw: true });
+  const nowPlaying = {};
+
+  nowPlayingRows.forEach((row) => {
+    try {
+      nowPlaying[row.userId] = JSON.parse(row.payload);
+    } catch {
+      nowPlaying[row.userId] = { empty: true };
+    }
+  });
+
+  return { users, nowPlaying };
+}
+
+let saveQueue = Promise.resolve();
+
 function saveDb() {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const tempPath = `${DB_PATH}.tmp`;
-  fs.writeFileSync(tempPath, JSON.stringify(db, null, 2));
-  fs.renameSync(tempPath, DB_PATH);
+  const nextSave = saveQueue.then(() => persistDb(), () => persistDb());
+  saveQueue = nextSave.catch((error) => {
+    console.error('Database save failed.');
+    console.error(error);
+  });
+  return nextSave;
+}
+
+async function persistDb() {
+  await sequelize.transaction(async (transaction) => {
+    const userIds = db.users.map((user) => user.id);
+    for (const user of db.users) {
+      await UserModel.upsert({
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        publicId: user.publicId,
+        passwordHash: user.passwordHash,
+        passwordSalt: user.passwordSalt,
+        passwordIterations: user.passwordIterations,
+        apiKeyHash: user.apiKeyHash,
+        apiKeyPreview: user.apiKeyPreview,
+        overlayStyle: getUserOverlayStyle(user),
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      }, { transaction });
+    }
+
+    await destroyMissingRows(UserModel, 'id', userIds, transaction);
+
+    const nowPlayingUserIds = Object.keys(db.nowPlaying);
+    for (const userId of nowPlayingUserIds) {
+      await NowPlayingModel.upsert({
+        userId,
+        payload: JSON.stringify(db.nowPlaying[userId] || { empty: true }),
+      }, { transaction });
+    }
+
+    await destroyMissingRows(NowPlayingModel, 'userId', nowPlayingUserIds, transaction);
+  });
+}
+
+async function destroyMissingRows(model, field, currentIds, transaction) {
+  if (currentIds.length === 0) {
+    await model.destroy({ where: {}, transaction });
+    return;
+  }
+
+  await model.destroy({
+    where: {
+      [field]: {
+        [Op.notIn]: currentIds,
+      },
+    },
+    transaction,
+  });
+}
+
+async function importLegacyJsonIfNeeded() {
+  if (db.users.length > 0 || !fs.existsSync(LEGACY_JSON_PATH)) {
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(LEGACY_JSON_PATH, 'utf8'));
+    const users = Array.isArray(parsed.users) ? parsed.users : [];
+    const nowPlaying = parsed.nowPlaying && typeof parsed.nowPlaying === 'object'
+      ? parsed.nowPlaying
+      : {};
+
+    if (users.length === 0 && Object.keys(nowPlaying).length === 0) {
+      return;
+    }
+
+    db = { users, nowPlaying };
+    await saveDb();
+    console.log(`Imported legacy JSON database from ${LEGACY_JSON_PATH}`);
+  } catch (error) {
+    console.warn(`Could not import legacy JSON database from ${LEGACY_JSON_PATH}: ${error.message}`);
+  }
 }
 
 function readString(value, maxLength) {

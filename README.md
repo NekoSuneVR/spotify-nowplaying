@@ -17,7 +17,35 @@ Copy `.env.example` to `.env` when deploying and set:
 ```env
 PORT=3000
 PUBLIC_BASE_URL=https://spnp.nekosunevr.co.uk
+DATABASE_DIALECT=sqlite
+SQLITE_STORAGE=./data/nowplaying.sqlite
 ```
+
+The server uses Sequelize for storage. SQLite is the default and needs no separate database server.
+
+MySQL example:
+
+```env
+DATABASE_DIALECT=mysql
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=3306
+DATABASE_NAME=spotify_nowplaying
+DATABASE_USER=spotify_nowplaying
+DATABASE_PASSWORD=change-me
+```
+
+PostgreSQL example:
+
+```env
+DATABASE_DIALECT=postgresql
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=5432
+DATABASE_NAME=spotify_nowplaying
+DATABASE_USER=spotify_nowplaying
+DATABASE_PASSWORD=change-me
+```
+
+You can also use a single `DATABASE_URL`, for example `postgres://user:pass@host:5432/spotify_nowplaying`. Existing old JSON installs can be imported once with `LEGACY_JSON_PATH=./data/db.json`.
 
 Open `http://localhost:3000`, register an account, and copy:
 
