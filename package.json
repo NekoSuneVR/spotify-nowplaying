@@ -1,0 +1,26 @@
+{
+  "name": "spotify-nowplaying-server",
+  "version": "1.0.0",
+  "description": "Self-hosted Spotify now-playing overlay server with accounts and API keys.",
+  "main": "app.js",
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/input.css -o ./public/app.css --minify",
+    "build": "npm run build:css",
+    "start": "npm run build:css && node app.js",
+    "dev": "npm run build:css && nodemon app.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.5.0",
+    "nodemon": "^3.1.14",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.17"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

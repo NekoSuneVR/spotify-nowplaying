@@ -1,0 +1,268 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    @apply m-0 bg-neko-bg text-zinc-50 antialiased;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background-image:
+      linear-gradient(135deg, rgba(30, 215, 96, 0.1), transparent 34%),
+      linear-gradient(180deg, #07100c 0%, #050807 52%, #020403 100%);
+  }
+
+  a {
+    @apply text-inherit;
+  }
+
+  input {
+    @apply min-w-0 w-full rounded-lg border border-neko-line bg-black/40 px-3 py-3 text-sm text-zinc-50 outline-none transition placeholder:text-zinc-500 focus:border-neko-green focus:ring-2 focus:ring-neko-green/20 disabled:text-zinc-500;
+  }
+
+  label {
+    @apply grid gap-2 text-sm font-bold text-zinc-300;
+  }
+
+  h1,
+  h2,
+  p {
+    @apply m-0;
+  }
+}
+
+@layer components {
+  .auth-grid {
+    @apply grid min-h-screen grid-cols-1 gap-5 p-4 lg:grid-cols-[0.95fr_1.05fr] lg:p-7;
+  }
+
+  .brand-panel {
+    @apply relative flex min-h-[420px] flex-col justify-center overflow-hidden rounded-lg border border-neko-line bg-neko-panel p-7 shadow-panel sm:p-10 lg:p-16;
+  }
+
+  .brand-panel::before {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neko-green to-transparent;
+  }
+
+  .brand-panel h1,
+  .topbar h1 {
+    @apply max-w-4xl text-5xl font-black leading-none tracking-normal text-white sm:text-6xl lg:text-7xl;
+  }
+
+  .lede {
+    @apply mt-5 max-w-2xl text-base leading-7 text-zinc-300;
+  }
+
+  .eyebrow {
+    @apply mb-3 text-xs font-black uppercase tracking-[0.16em] text-neko-mint;
+  }
+
+  .status-strip {
+    @apply mt-8 flex flex-wrap gap-2;
+  }
+
+  .status-strip span {
+    @apply rounded-md border border-neko-line bg-white/[0.04] px-3 py-2 text-sm font-bold text-zinc-300;
+  }
+
+  .panel {
+    @apply rounded-lg border border-neko-line bg-neko-panel/95 p-5 shadow-panel backdrop-blur;
+  }
+
+  .auth-panel {
+    @apply grid content-center gap-4 lg:grid-cols-2;
+  }
+
+  .form-block {
+    @apply grid min-w-0 gap-4 rounded-lg border border-neko-line bg-black/25 p-5;
+  }
+
+  .form-block h2,
+  .panel h2 {
+    @apply text-xl font-black text-white;
+  }
+
+  .button {
+    @apply inline-flex min-h-[42px] items-center justify-center rounded-lg border border-neko-line bg-white/[0.06] px-4 py-2 text-sm font-black text-white no-underline transition hover:border-neko-green/70 hover:bg-neko-green/10;
+  }
+
+  .button.primary {
+    @apply border-transparent bg-neko-green text-black shadow-glow hover:bg-neko-mint;
+  }
+
+  .button.danger {
+    @apply hover:border-red-400/70 hover:bg-red-500/10;
+  }
+
+  .alert {
+    @apply rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm font-bold text-red-100 lg:col-span-2;
+  }
+
+  .hint {
+    @apply -mt-2 text-xs leading-5 text-zinc-500;
+  }
+
+  .app-shell {
+    @apply mx-auto min-h-screen w-[min(1180px,calc(100%-32px))] py-7;
+  }
+
+  .topbar {
+    @apply flex flex-col gap-5 border-b border-neko-line pb-6 sm:flex-row sm:items-end sm:justify-between;
+  }
+
+  .topbar-actions {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .dashboard-grid {
+    @apply mt-5 grid gap-4 lg:grid-cols-2;
+  }
+
+  .copy-row {
+    @apply grid grid-cols-[minmax(0,1fr)_auto] gap-2;
+  }
+
+  .now-card {
+    @apply lg:col-span-2;
+  }
+
+  .song-row {
+    @apply grid grid-cols-[92px_minmax(0,1fr)] items-center gap-4;
+  }
+
+  .art {
+    @apply aspect-square w-[92px] rounded-lg border border-neko-line bg-gradient-to-br from-neko-green to-neko-cyan bg-cover bg-center shadow-glow;
+  }
+
+  .song-meta {
+    @apply grid min-w-0 gap-1;
+  }
+
+  .song-meta strong,
+  .song-meta span,
+  .song-meta small {
+    @apply overflow-hidden text-ellipsis whitespace-nowrap;
+  }
+
+  .song-meta strong {
+    @apply text-2xl font-black text-white;
+  }
+
+  .song-meta span {
+    @apply text-zinc-300;
+  }
+
+  .song-meta small {
+    @apply text-xs font-black uppercase tracking-[0.14em] text-neko-mint;
+  }
+
+  .empty-state {
+    @apply rounded-lg border border-dashed border-neko-line px-4 py-10 text-center text-sm font-bold text-zinc-500;
+  }
+
+  .center-page {
+    @apply grid min-h-screen place-items-center p-6;
+  }
+
+  .narrow {
+    @apply w-[min(460px,100%)];
+  }
+
+  .stat-grid {
+    @apply grid gap-3 sm:grid-cols-3;
+  }
+
+  .stat {
+    @apply rounded-lg border border-neko-line bg-black/25 p-4;
+  }
+
+  .stat span {
+    @apply text-xs font-black uppercase tracking-[0.14em] text-zinc-500;
+  }
+
+  .stat strong {
+    @apply mt-2 block overflow-hidden text-ellipsis whitespace-nowrap text-lg font-black text-white;
+  }
+
+  .overlay-body {
+    @apply overflow-hidden;
+  }
+
+  .overlay-root {
+    @apply grid min-h-screen place-items-center bg-transparent p-4;
+  }
+
+  .overlay-card {
+    @apply grid w-[min(760px,100%)] grid-cols-[112px_minmax(0,1fr)] items-center gap-4 rounded-lg border border-white/15 bg-black/75 p-4 text-white shadow-panel backdrop-blur-xl;
+  }
+
+  .overlay-root.compact .overlay-card {
+    @apply w-[min(460px,100%)] grid-cols-[72px_minmax(0,1fr)] p-3;
+  }
+
+  .overlay-root.compact .overlay-art {
+    @apply w-[72px];
+  }
+
+  .overlay-art {
+    @apply aspect-square w-[112px] rounded-lg bg-gradient-to-br from-neko-green to-neko-cyan bg-cover bg-center shadow-glow;
+  }
+
+  .overlay-info {
+    @apply grid min-w-0 gap-2;
+  }
+
+  .overlay-kicker {
+    @apply text-xs font-black uppercase tracking-[0.16em] text-neko-mint;
+  }
+
+  .overlay-title,
+  .overlay-artist {
+    @apply overflow-hidden text-ellipsis whitespace-nowrap;
+  }
+
+  .overlay-title {
+    @apply text-2xl font-black text-white sm:text-3xl;
+  }
+
+  .overlay-artist {
+    @apply text-sm font-bold text-zinc-300 sm:text-base;
+  }
+
+  .overlay-progress {
+    @apply h-2 overflow-hidden rounded-full bg-white/15;
+  }
+
+  .overlay-progress div {
+    @apply h-full rounded-full bg-neko-green shadow-glow transition-[width];
+  }
+
+  .overlay-time {
+    @apply flex justify-between text-xs font-bold tabular-nums text-zinc-400;
+  }
+
+  @media (max-width: 640px) {
+    .song-row,
+    .overlay-card {
+      @apply grid-cols-[72px_minmax(0,1fr)];
+    }
+
+    .art,
+    .overlay-art {
+      @apply w-[72px];
+    }
+  }
+}
