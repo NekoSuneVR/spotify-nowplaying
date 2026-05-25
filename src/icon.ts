@@ -1,1 +1,9 @@
-export default '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="none"/><path d="M13 31V17m8 19V12m8 20V16m8 11v-6" fill="none" stroke="#1ed760" stroke-width="5" stroke-linecap="round"/><path d="M9 36c9-6 21-6 30 0" fill="none" stroke="#6aa7ff" stroke-width="4" stroke-linecap="round"/></svg>';
+const iconSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+  <path d="M3 10.8V6.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M6.4 12.2V3.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M9.8 10.2V5.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M13.2 8.8V7.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+</svg>`;
+
+export default iconSvg;
