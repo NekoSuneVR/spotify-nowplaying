@@ -1,1 +1,9 @@
-export default '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1" y="1" width="10" height="14" rx="2" fill="currentColor" opacity="0.22"/><path d="M4 11V6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M6.5 12V4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M9 10V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12.25" cy="11.75" r="2.75" fill="var(--spice-button, #1db954)"/><path d="M12.25 10.45V13.05" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/><path d="M10.95 11.75H13.55" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></svg>';
+const iconSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+  <path d="M3 10.8V6.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M6.4 12.2V3.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M9.8 10.2V5.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M13.2 8.8V7.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+</svg>`;
+
+export default iconSvg;
