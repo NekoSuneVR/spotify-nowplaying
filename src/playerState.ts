@@ -1,11 +1,23 @@
+export type ArtistLink = {
+  name: string;
+  uri: string;
+  spotifyUrl: string;
+};
+
 export type NowPlayingPayload = {
   cleared?: boolean;
   trackUri: string;
   name: string;
+  title: string;
   artists: string[];
+  artistLinks: ArtistLink[];
   artistName: string;
   albumName: string;
+  albumUri: string;
+  albumUrl: string;
   image: string;
+  coverImage: string;
+  spotifyUrl: string;
   durationMs: number;
   progressMs: number;
   paused: boolean;
@@ -25,6 +37,7 @@ export function readNowPlaying(): NowPlayingPayload {
   }
 
   const artists = extractArtists(item, metadata);
+  const artistLinks = extractArtistLinks(item, metadata, artists);
   const albumName = firstString(
     item.album?.name,
     item.albumOfTrack?.name,
@@ -32,6 +45,8 @@ export function readNowPlaying(): NowPlayingPayload {
     metadata.album_name,
     metadata.album,
   );
+  const albumUri = extractAlbumUri(item, metadata);
+  const image = extractImage(item, metadata);
   const durationMs = firstNumber(
     item.duration?.milliseconds,
     item.duration?.totalMilliseconds,
@@ -47,14 +62,21 @@ export function readNowPlaying(): NowPlayingPayload {
     playerData.position_as_of_timestamp,
   );
   const isPlaying = Boolean(Spicetify.Player.isPlaying?.());
+  const name = firstString(item.name, metadata.title, metadata.name);
 
   return {
     trackUri,
-    name: firstString(item.name, metadata.title, metadata.name),
-    artists,
-    artistName: artists.join(', '),
+    name,
+    title: name,
+    artists: artistLinks.length > 0 ? artistLinks.map((artist) => artist.name) : artists,
+    artistLinks,
+    artistName: artistLinks.length > 0 ? artistLinks.map((artist) => artist.name).join(', ') : artists.join(', '),
     albumName,
-    image: extractImage(item, metadata),
+    albumUri,
+    albumUrl: spotifyUrlFromUri(albumUri),
+    image,
+    coverImage: image,
+    spotifyUrl: spotifyUrlFromUri(trackUri),
     durationMs,
     progressMs,
     paused: !isPlaying,
@@ -67,10 +89,16 @@ function clearedPayload(): NowPlayingPayload {
     cleared: true,
     trackUri: '',
     name: '',
+    title: '',
     artists: [],
+    artistLinks: [],
     artistName: '',
     albumName: '',
+    albumUri: '',
+    albumUrl: '',
     image: '',
+    coverImage: '',
+    spotifyUrl: '',
     durationMs: 0,
     progressMs: 0,
     paused: true,
@@ -79,19 +107,12 @@ function clearedPayload(): NowPlayingPayload {
 }
 
 function extractArtists(item: any, metadata: Record<string, any>) {
-  const artistObjects = Array.isArray(item.artists)
-    ? item.artists
-    : Array.isArray(item.artistsWithRoles)
-      ? item.artistsWithRoles
-      : [];
-  if (Array.isArray(artistObjects)) {
-    const names = artistObjects
-      .map((artist: any) => firstString(artist?.name, artist?.profile?.name))
-      .filter(Boolean);
+  const names = collectArtistCandidates(item)
+    .map((artist: any) => firstString(artist?.name, artist?.profile?.name))
+    .filter(Boolean);
 
-    if (names.length > 0) {
-      return names;
-    }
+  if (names.length > 0) {
+    return names;
   }
 
   const metadataArtist = firstString(
@@ -107,6 +128,87 @@ function extractArtists(item: any, metadata: Record<string, any>) {
     : [];
 }
 
+function extractArtistLinks(item: any, metadata: Record<string, any>, fallbackNames: string[]) {
+  const links = collectArtistCandidates(item)
+    .map((artist: any) => {
+      const name = firstString(artist?.name, artist?.profile?.name);
+      const uri = firstString(artist?.uri, artist?.profile?.uri, artist?.artistUri);
+      const spotifyUrl = firstString(
+        artist?.external_urls?.spotify,
+        artist?.externalUrls?.spotify,
+        artist?.url,
+      ) || spotifyUrlFromUri(uri);
+
+      return name ? { name, uri, spotifyUrl } : null;
+    })
+    .filter(Boolean) as ArtistLink[];
+
+  if (links.length > 0) {
+    return dedupeArtists(links);
+  }
+
+  const metadataUris = splitMetadataList(firstString(
+    metadata.artist_uri,
+    metadata.artist_uris,
+    metadata.artistUri,
+    metadata.artistUris,
+  ));
+
+  return fallbackNames.map((name, index) => {
+    const uri = metadataUris[index] || '';
+    return {
+      name,
+      uri,
+      spotifyUrl: spotifyUrlFromUri(uri),
+    };
+  });
+}
+
+function collectArtistCandidates(item: any) {
+  const candidates: any[] = [];
+  const add = (value: any) => {
+    if (!value) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(add);
+      return;
+    }
+
+    candidates.push(value);
+  };
+
+  add(item.artists);
+  add(item.artistsWithRoles);
+  add(item.artistsWithRoles?.map((role: any) => role?.artists));
+  add(item.artistsWithRoles?.map((role: any) => role?.artist));
+  add(item.albumOfTrack?.artists);
+  return candidates;
+}
+
+function dedupeArtists(artists: ArtistLink[]) {
+  const seen = new Set<string>();
+  return artists.filter((artist) => {
+    const key = artist.uri || artist.spotifyUrl || artist.name.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
+
+function extractAlbumUri(item: any, metadata: Record<string, any>) {
+  return firstString(
+    item.album?.uri,
+    item.albumOfTrack?.uri,
+    metadata.album_uri,
+    metadata.albumUri,
+  );
+}
+
 function extractImage(item: any, metadata: Record<string, any>) {
   return firstString(
     item.images?.[0]?.url,
@@ -119,6 +221,29 @@ function extractImage(item: any, metadata: Record<string, any>) {
     metadata.album_image_url,
     metadata.cover_url,
   );
+}
+
+function spotifyUrlFromUri(uri: string) {
+  const [service, type, id] = uri.split(':');
+  const supportedTypes: Record<string, string> = {
+    album: 'album',
+    artist: 'artist',
+    episode: 'episode',
+    playlist: 'playlist',
+    show: 'show',
+    track: 'track',
+  };
+
+  return service === 'spotify' && supportedTypes[type] && id
+    ? `https://open.spotify.com/${supportedTypes[type]}/${encodeURIComponent(id)}`
+    : '';
+}
+
+function splitMetadataList(value: string) {
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function firstString(...values: any[]) {
