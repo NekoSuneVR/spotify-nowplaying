@@ -21,7 +21,7 @@ DATABASE_DIALECT=sqlite
 SQLITE_STORAGE=./data/nowplaying.sqlite
 ```
 
-The server uses Sequelize for storage. SQLite is the default and needs no separate database server.
+The server uses SQL storage. SQLite is the default and needs no separate database server; it uses Node 24's built-in SQLite support, so the native `sqlite3` npm package is not required.
 
 MySQL example:
 
@@ -33,6 +33,8 @@ DATABASE_NAME=spotify_nowplaying
 DATABASE_USER=spotify_nowplaying
 DATABASE_PASSWORD=change-me
 ```
+
+Pterodactyl database variables `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` are also supported. If those are present and `DATABASE_DIALECT` is not set, the server assumes MySQL.
 
 PostgreSQL example:
 

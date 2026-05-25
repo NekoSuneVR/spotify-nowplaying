@@ -10,10 +10,18 @@ const { Sequelize, DataTypes, Op } = require('sequelize');
 const { Server } = require('socket.io');
 
 const PORT = readIntEnv('PORT', 3000);
-const DATABASE_DIALECT = normalizeDatabaseDialect(
-  process.env.DATABASE_DIALECT || process.env.DB_DIALECT || inferDatabaseDialect(process.env.DATABASE_URL) || 'sqlite',
-);
 const DATABASE_URL = readString(process.env.DATABASE_URL, 2048);
+const DATABASE_DIALECT = normalizeDatabaseDialect(
+  process.env.DATABASE_DIALECT
+  || process.env.DB_DIALECT
+  || inferDatabaseDialect(DATABASE_URL)
+  || inferDatabaseDialectFromEnv()
+  || 'sqlite',
+);
+const DATABASE_HOST = process.env.DATABASE_HOST || process.env.DB_HOST || '127.0.0.1';
+const DATABASE_NAME = process.env.DATABASE_NAME || process.env.DB_DATABASE || process.env.DB_NAME || 'spotify_nowplaying';
+const DATABASE_USER = process.env.DATABASE_USER || process.env.DB_USERNAME || process.env.DB_USER || 'root';
+const DATABASE_PASSWORD = process.env.DATABASE_PASSWORD || process.env.DB_PASSWORD || '';
 const SQLITE_STORAGE = process.env.SQLITE_STORAGE || process.env.SQLITE_PATH || path.join(__dirname, 'data', 'nowplaying.sqlite');
 const LEGACY_JSON_PATH = process.env.LEGACY_JSON_PATH || path.join(__dirname, 'data', 'db.json');
 const PUBLIC_BASE_URL = normalizeBaseUrl(process.env.PUBLIC_BASE_URL || process.env.APP_URL || '');
@@ -31,7 +39,7 @@ const io = new Server(httpServer, {
 });
 
 const sessions = new Map();
-const { sequelize, UserModel, NowPlayingModel } = createDatabase();
+const { sequelize, UserModel, NowPlayingModel, sqliteDb } = createDatabase();
 let db = { users: [], nowPlaying: {} };
 
 app.set('trust proxy', true);
@@ -1066,6 +1074,15 @@ function inferDatabaseDialect(url) {
   return '';
 }
 
+function inferDatabaseDialectFromEnv() {
+  return process.env.DATABASE_HOST
+    || process.env.DB_HOST
+    || process.env.DATABASE_NAME
+    || process.env.DB_DATABASE
+    ? 'mysql'
+    : '';
+}
+
 function defaultDatabasePort(dialect) {
   if (dialect === 'postgres') {
     return 5432;
@@ -1087,7 +1104,7 @@ function describeDatabase() {
     return `${DATABASE_DIALECT}:DATABASE_URL`;
   }
 
-  return `${DATABASE_DIALECT}:${process.env.DATABASE_HOST || '127.0.0.1'}/${process.env.DATABASE_NAME || 'spotify_nowplaying'}`;
+  return `${DATABASE_DIALECT}:${DATABASE_HOST}/${DATABASE_NAME}`;
 }
 
 function isTruthyEnv(value) {
@@ -1197,6 +1214,10 @@ function parseCookies(req) {
 }
 
 function createDatabase() {
+  if (DATABASE_DIALECT === 'sqlite') {
+    return createSqliteDatabase();
+  }
+
   const options = {
     dialect: DATABASE_DIALECT,
     logging: isTruthyEnv(process.env.DATABASE_LOGGING) ? console.log : false,
@@ -1208,14 +1229,13 @@ function createDatabase() {
   const instance = DATABASE_URL
     ? new Sequelize(DATABASE_URL, options)
     : new Sequelize(
-      process.env.DATABASE_NAME || 'spotify_nowplaying',
-      process.env.DATABASE_USER || 'root',
-      process.env.DATABASE_PASSWORD || '',
+      DATABASE_NAME,
+      DATABASE_USER,
+      DATABASE_PASSWORD,
       {
         ...options,
-        host: process.env.DATABASE_HOST || '127.0.0.1',
-        port: readIntEnv('DATABASE_PORT', defaultDatabasePort(DATABASE_DIALECT)),
-        storage: DATABASE_DIALECT === 'sqlite' ? SQLITE_STORAGE : undefined,
+        host: DATABASE_HOST,
+        port: readIntEnv('DATABASE_PORT', readIntEnv('DB_PORT', defaultDatabasePort(DATABASE_DIALECT))),
       },
     );
 
@@ -1258,9 +1278,29 @@ function createDatabase() {
   return { sequelize: instance, UserModel: User, NowPlayingModel: NowPlaying };
 }
 
+function createSqliteDatabase() {
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = require('node:sqlite'));
+  } catch {
+    throw new Error('SQLite storage needs Node.js with built-in node:sqlite support. Use Node 24 or set DATABASE_DIALECT=mysql/postgres with DATABASE_* or DB_* env vars.');
+  }
+
+  fs.mkdirSync(path.dirname(SQLITE_STORAGE), { recursive: true });
+  return {
+    sequelize: null,
+    UserModel: null,
+    NowPlayingModel: null,
+    sqliteDb: new DatabaseSync(SQLITE_STORAGE),
+  };
+}
+
 async function initializeDatabase() {
-  if (DATABASE_DIALECT === 'sqlite') {
-    fs.mkdirSync(path.dirname(SQLITE_STORAGE), { recursive: true });
+  if (sqliteDb) {
+    initializeSqliteDatabase();
+    db = await loadDb();
+    await importLegacyJsonIfNeeded();
+    return;
   }
 
   await sequelize.authenticate();
@@ -1269,7 +1309,36 @@ async function initializeDatabase() {
   await importLegacyJsonIfNeeded();
 }
 
+function initializeSqliteDatabase() {
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      displayName TEXT NOT NULL,
+      publicId TEXT NOT NULL UNIQUE,
+      passwordHash TEXT NOT NULL,
+      passwordSalt TEXT NOT NULL,
+      passwordIterations INTEGER NOT NULL,
+      apiKeyHash TEXT NOT NULL,
+      apiKeyPreview TEXT NOT NULL,
+      overlayStyle TEXT NOT NULL DEFAULT 'default',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS now_playing (
+      userId TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+}
+
 async function loadDb() {
+  if (sqliteDb) {
+    return loadSqliteDb();
+  }
+
   const users = (await UserModel.findAll({ raw: true }))
     .map((user) => ({
       id: user.id,
@@ -1299,6 +1368,36 @@ async function loadDb() {
   return { users, nowPlaying };
 }
 
+function loadSqliteDb() {
+  const users = sqliteDb.prepare('SELECT * FROM users').all()
+    .map((user) => ({
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      publicId: user.publicId,
+      passwordHash: user.passwordHash,
+      passwordSalt: user.passwordSalt,
+      passwordIterations: user.passwordIterations,
+      apiKeyHash: user.apiKeyHash,
+      apiKeyPreview: user.apiKeyPreview,
+      overlayStyle: user.overlayStyle,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+  const nowPlayingRows = sqliteDb.prepare('SELECT * FROM now_playing').all();
+  const nowPlaying = {};
+
+  nowPlayingRows.forEach((row) => {
+    try {
+      nowPlaying[row.userId] = JSON.parse(row.payload);
+    } catch {
+      nowPlaying[row.userId] = { empty: true };
+    }
+  });
+
+  return { users, nowPlaying };
+}
+
 let saveQueue = Promise.resolve();
 
 function saveDb() {
@@ -1311,6 +1410,11 @@ function saveDb() {
 }
 
 async function persistDb() {
+  if (sqliteDb) {
+    persistSqliteDb();
+    return;
+  }
+
   await sequelize.transaction(async (transaction) => {
     const userIds = db.users.map((user) => user.id);
     for (const user of db.users) {
@@ -1342,6 +1446,87 @@ async function persistDb() {
 
     await destroyMissingRows(NowPlayingModel, 'userId', nowPlayingUserIds, transaction);
   });
+}
+
+function persistSqliteDb() {
+  sqliteDb.exec('BEGIN IMMEDIATE');
+  try {
+    const upsertUser = sqliteDb.prepare(`
+      INSERT INTO users (
+        id,
+        username,
+        displayName,
+        publicId,
+        passwordHash,
+        passwordSalt,
+        passwordIterations,
+        apiKeyHash,
+        apiKeyPreview,
+        overlayStyle,
+        createdAt,
+        updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        username = excluded.username,
+        displayName = excluded.displayName,
+        publicId = excluded.publicId,
+        passwordHash = excluded.passwordHash,
+        passwordSalt = excluded.passwordSalt,
+        passwordIterations = excluded.passwordIterations,
+        apiKeyHash = excluded.apiKeyHash,
+        apiKeyPreview = excluded.apiKeyPreview,
+        overlayStyle = excluded.overlayStyle,
+        createdAt = excluded.createdAt,
+        updatedAt = excluded.updatedAt
+    `);
+    const upsertNowPlaying = sqliteDb.prepare(`
+      INSERT INTO now_playing (userId, payload)
+      VALUES (?, ?)
+      ON CONFLICT(userId) DO UPDATE SET
+        payload = excluded.payload
+    `);
+    const userIds = db.users.map((user) => user.id);
+
+    for (const user of db.users) {
+      upsertUser.run(
+        user.id,
+        user.username,
+        user.displayName,
+        user.publicId,
+        user.passwordHash,
+        user.passwordSalt,
+        user.passwordIterations,
+        user.apiKeyHash,
+        user.apiKeyPreview,
+        getUserOverlayStyle(user),
+        user.createdAt,
+        user.updatedAt,
+      );
+    }
+
+    deleteMissingSqliteRows('users', 'id', userIds);
+
+    const nowPlayingUserIds = Object.keys(db.nowPlaying);
+    for (const userId of nowPlayingUserIds) {
+      upsertNowPlaying.run(userId, JSON.stringify(db.nowPlaying[userId] || { empty: true }));
+    }
+
+    deleteMissingSqliteRows('now_playing', 'userId', nowPlayingUserIds);
+    sqliteDb.exec('COMMIT');
+  } catch (error) {
+    sqliteDb.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function deleteMissingSqliteRows(table, field, ids) {
+  if (ids.length === 0) {
+    sqliteDb.prepare(`DELETE FROM ${table}`).run();
+    return;
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  sqliteDb.prepare(`DELETE FROM ${table} WHERE ${field} NOT IN (${placeholders})`).run(...ids);
 }
 
 async function destroyMissingRows(model, field, currentIds, transaction) {
